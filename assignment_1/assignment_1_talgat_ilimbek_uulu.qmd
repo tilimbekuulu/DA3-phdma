@@ -1,0 +1,48 @@
+---
+title: "Assignment 1: Predicting Hourly wage of Financial Managers using Linear Regressions "
+author: "Talgat Ilimbek uulu"
+format: pdf
+editor: visual
+---
+
+```{r include=FALSE}
+# Loading packages
+library(tidyverse)
+library(readr)
+```
+
+```{r include=FALSE}
+# Loading data and filtering by occupation code
+sample <- read_csv("raw_data/morg-2014-emp.csv") %>% 
+  filter(occ2012 == "120")
+```
+
+```{r include=FALSE}
+
+# Changing variables to factors
+sample$sex <- as.factor(sample$sex)
+sample$race <- as.factor(sample$race)
+sample$grade92 <- as.factor(sample$grade92)
+sample$marital <- as.factor(sample$marital)
+
+# creating dependent variable hourly_wage and log hourly_wage
+sample$hourly_wage <- sample$earnwke/sample$uhours
+sample$log_wage <- log(sample$hourly_wage)
+
+```
+
+```{r include=FALSE}
+
+# 2 observations with negative log_wage are deleted (significant outliers and highly likely to be errors)
+sample <- sample %>% 
+  filter(log_wage > 0)
+
+```
+
+### Question and data
+
+The goal of this assignment is to predict hourly wage of financial managers in US market. The starting point of our study will be a human capital theory. In labor economics, human capital is generally referred to the stock of skills and characteristics possessed by workers that increase their productivity. Human capital research has traditionally used educational attainment as a way to measure human capital. The work by Mincer (1974) proposes a famous single equation model which links a wage to schooling and experience in labor market
+
+$$lnw = f(s,x) = \beta_0 + ps + \beta_1x + \beta_2x^2$$
+
+where $w$ is wage, $s$ is a years of schooling and $x$ is a potential experience in a labor market.
