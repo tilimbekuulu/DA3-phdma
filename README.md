@@ -1,2 +1,2 @@
 # DA3-phdma
- machine_learning_ceu
+ Repository for the prediction with machine learning course from CEU
