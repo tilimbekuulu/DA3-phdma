@@ -3,12 +3,24 @@ title: "Assignment 1: Predicting Hourly wage of Financial Managers using Linear 
 author: "Talgat Ilimbek uulu"
 format: pdf
 editor: visual
+bibligraphy: references.bib
 ---
 
 ```{r include=FALSE}
 # Loading packages
 library(tidyverse)
 library(readr)
+library(modelsummary)
+library(fixest)
+library(lmtest)
+library(sandwich)
+#library(haven)
+library(stargazer)
+library(caret)
+library(grid)
+library(RColorBrewer)
+library(ggthemes)
+library(gridExtra)
 ```
 
 ```{r include=FALSE}
@@ -18,16 +30,62 @@ sample <- read_csv("raw_data/morg-2014-emp.csv") %>%
 ```
 
 ```{r include=FALSE}
-
-# Changing variables to factors
-sample$sex <- as.factor(sample$sex)
-sample$race <- as.factor(sample$race)
-sample$grade92 <- as.factor(sample$grade92)
-sample$marital <- as.factor(sample$marital)
+## Preparing data for the analysis
 
 # creating dependent variable hourly_wage and log hourly_wage
 sample$hourly_wage <- sample$earnwke/sample$uhours
 sample$log_wage <- log(sample$hourly_wage)
+
+# creating necessary dummy variables
+sample$male <- ifelse(sample$sex == 1, 1, 0)
+sample$union <- ifelse(sample$unionmme == "Yes", 1, 0)
+sample$married <- ifelse(sample$marital %in% c(1,2,3), 1, 0)
+sample$widowed <- ifelse(sample$marital == 4, 1, 0)
+sample$divorced <- ifelse(sample$marital == 5, 1, 0)
+sample$separated <- ifelse(sample$marital == 6, 1, 0)
+sample$never_married <- ifelse(sample$marital == 7, 1, 0)
+sample$native_born_us <- ifelse(sample$prcitshp == "Native, Born In US", 1, 0)
+sample$white <- ifelse(sample$race == 1, 1, 0)
+sample$black <- ifelse(sample$race == 2, 1, 0)
+sample$asian <- ifelse(sample$race == 4, 1, 0)
+
+# transforming education variable into years of schooling
+sample$educ <- ifelse(sample$grade92 == 34, 8, sample$grade92)
+sample$educ <- ifelse(sample$grade92 == 35, 9, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 36, 10, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 37, 11, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 39, 12, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 40, 13, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 41, 14, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 42, 14, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 43, 16, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 44, 18, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 45, 22, sample$educ)
+sample$educ <- ifelse(sample$grade92 == 46, 22, sample$educ)
+
+# creating binning variable for grade92
+sample$educ_bin <- ifelse(sample$grade92 <= 38, "no_high_school_degree", sample$grade92)
+sample$educ_bin <- ifelse(sample$grade92 == 39, "high_school_degree", sample$educ_bin)
+sample$educ_bin <- ifelse(sample$grade92 == 40, "some_college", sample$educ_bin)
+sample$educ_bin <- ifelse(sample$grade92 >= 41, "college_degree", sample$educ_bin)
+
+# creating experience variable
+sample$exper <- ifelse(sample$educ_bin == "no_high_school_degree", sample$age - 17, sample$educ_bin)
+sample$exper <- ifelse(sample$educ_bin == "high_school_degree", sample$age - 19, sample$exper)
+sample$exper <- ifelse(sample$educ_bin == "some_college", sample$age - 21, sample$exper)
+sample$exper <- ifelse(sample$educ_bin == "college_degree", sample$age - 23, sample$exper)
+sample$exper <- ifelse(sample$exper < 0, 0, sample$exper)
+sample$exper <- as.numeric(sample$exper)
+sample$expersq <- sample$exper^2
+
+# creating a regional variables
+
+sample$top_states <- ifelse(sample$stfips %in% c("NY","NJ","DE","CO","CA","MA","RI"), 1, 0)
+sample$low_states <- ifelse(sample$stfips %in% c("MS","AR","WV","NM","ID"), 1, 0)
+
+# creating an industry dummy
+
+sample$top_industry <- ifelse(sample$ind02 == "Securities, commodities, funds, trusts, and other financial investments (523, 525)"|sample$ind02 == "Computer systems design and related services (5415)",1,0)
 
 ```
 
@@ -39,10 +97,45 @@ sample <- sample %>%
 
 ```
 
-### Question and data
+### Motivation
 
-The goal of this assignment is to predict hourly wage of financial managers in US market. The starting point of our study will be a human capital theory. In labor economics, human capital is generally referred to the stock of skills and characteristics possessed by workers that increase their productivity. Human capital research has traditionally used educational attainment as a way to measure human capital. The work by Mincer (1974) proposes a famous single equation model which links a wage to schooling and experience in labor market
+The goal of this assignment is to predict hourly wage of financial managers in US market. The starting point of our study will be a human capital theory. In labor economics, human capital is generally referred to the stock of skills and characteristics possessed by workers that increase their productivity. Human capital research has traditionally used educational attainment as a way to measure human capital. The work by Mincer (1974) proposes a famous single equation model which links a wage to schooling and experience in labor market.
 
 $$lnw = f(s,x) = \beta_0 + ps + \beta_1x + \beta_2x^2$$
 
 where $w$ is wage, $s$ is a years of schooling and $x$ is a potential experience in a labor market.
+
+Mincer equation will serve as a basis upon which I plan to develop and refine additional models to explore and analyze the data.
+
+### Data
+
+In the sample, we have 1399 individuals in the "financial managers" occupation, of whom 71% hold a college degree. The dependent variable is the natural logarithm of earnings per hour, calculated as the ratio of weekly earnings to usual hours worked. Regarding the education variable, the data employs a credential-oriented measure. To align with the model, I transformed the variable into years of schooling, using standard durations for the obtained degrees. For instance, a PhD degree is considered equivalent to 22 years of schooling, MA degree to 18 years of schooling, etc. Years of potential experience are computed as the difference between current age and the age of potential entry into the labor market. This calculation assumes that individuals without a high school degree enter the labor force at age 17, those with a high school degree at 19, those with some college at 21, and those with a college degree at 23.
+
+![Log hourly wage, education and experience](graphs/graph1.png){fig-align="center" width="611"}
+
+To check whether functional form suggested by theory is consistent with the data, I estimated a lowess regression and plotted together with the scatterplot (see Figure 1). According to the pattern uncovered by lowess, earnings increase with each additional year of schooling and experience indeed showing the concave pattern. The standard regression table of the model is presented in Table 1.
+
+```{=tex}
+\begin{table}[ht]
+\caption{Wage baseline regression} 
+\vspace*{3mm}
+\centering 
+\begin{tabular}{l c } 
+\hline\hline 
+ & Ln wage \\ [0.5ex] 
+\hline 
+Education & .096*** (.006) \vspace{1mm}\\
+Experience & .041*** (.004) \vspace{1.5mm}\\
+Experience squared & -.0006*** (.0001) \vspace{1.5mm}\\
+Constant & 1.386*** (.10) \vspace{1.5mm}\\
+Number of observations & 1399 \\
+Adjusted R-squared & 0.25 \\
+\hline
+\multicolumn{2}{l}{\textsuperscript{***}$p<0.01$, 
+  \textsuperscript{**}$p<0.05$, 
+  \textsuperscript{*}$p<0.1$}
+  Robust standard errors in parenthesis
+\end{tabular}
+\end{table}
+```
+The OLS regression of log hourly wage to year of schooling and experience implies that 1 year of additional schooling is associated with 9.6% increase in monthly wage for financial managers. Both figures and regression give evidence supporting the argument that education and experience may play an important role in the wage determination. Note, however, all correlations should be interpreted with caution and shouldn't be given causal interpretation. The positive correlation between wage and education can reflect unobserved family and individual heterogeneity.
