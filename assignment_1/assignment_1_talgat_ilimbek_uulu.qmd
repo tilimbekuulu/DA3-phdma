@@ -3,7 +3,7 @@ title: "Assignment 1: Predicting Hourly wage of Financial Managers using Linear 
 author: "Talgat Ilimbek uulu"
 format: pdf
 editor: visual
-bibligraphy: references.bib
+bibliography: references.bib
 ---
 
 ```{r include=FALSE}
@@ -21,6 +21,8 @@ library(grid)
 library(RColorBrewer)
 library(ggthemes)
 library(gridExtra)
+library("lmtest")
+library("sandwich")
 ```
 
 ```{r include=FALSE}
@@ -48,6 +50,8 @@ sample$native_born_us <- ifelse(sample$prcitshp == "Native, Born In US", 1, 0)
 sample$white <- ifelse(sample$race == 1, 1, 0)
 sample$black <- ifelse(sample$race == 2, 1, 0)
 sample$asian <- ifelse(sample$race == 4, 1, 0)
+sample$hard_workers <- ifelse(sample$uhours > 50, 1, 0)
+sample$no_child <- ifelse(sample$ownchild == 0, 1, 0)
 
 # transforming education variable into years of schooling
 sample$educ <- ifelse(sample$grade92 == 34, 8, sample$grade92)
@@ -74,17 +78,15 @@ sample$exper <- ifelse(sample$educ_bin == "no_high_school_degree", sample$age - 
 sample$exper <- ifelse(sample$educ_bin == "high_school_degree", sample$age - 19, sample$exper)
 sample$exper <- ifelse(sample$educ_bin == "some_college", sample$age - 21, sample$exper)
 sample$exper <- ifelse(sample$educ_bin == "college_degree", sample$age - 23, sample$exper)
-sample$exper <- ifelse(sample$exper < 0, 0, sample$exper)
+sample$exper <- ifelse(sample$exper < 0, 0, sample$exper) # if experience is negative, then 0
 sample$exper <- as.numeric(sample$exper)
 sample$expersq <- sample$exper^2
 
 # creating a regional variables
-
 sample$top_states <- ifelse(sample$stfips %in% c("NY","NJ","DE","CO","CA","MA","RI"), 1, 0)
 sample$low_states <- ifelse(sample$stfips %in% c("MS","AR","WV","NM","ID"), 1, 0)
 
 # creating an industry dummy
-
 sample$top_industry <- ifelse(sample$ind02 == "Securities, commodities, funds, trusts, and other financial investments (523, 525)"|sample$ind02 == "Computer systems design and related services (5415)",1,0)
 
 ```
@@ -99,7 +101,7 @@ sample <- sample %>%
 
 ### Motivation
 
-The goal of this assignment is to predict hourly wage of financial managers in US market. The starting point of our study will be a human capital theory. In labor economics, human capital is generally referred to the stock of skills and characteristics possessed by workers that increase their productivity. Human capital research has traditionally used educational attainment as a way to measure human capital. The work by Mincer (1974) proposes a famous single equation model which links a wage to schooling and experience in labor market.
+The goal of this assignment is to predict hourly wage of financial managers in US market. The starting point of our study will be a human capital theory. In labor economics, human capital is generally referred to the stock of skills and characteristics possessed by workers that increase their productivity. Human capital research has traditionally used educational attainment as a way to measure human capital. The work by @mincer74 proposes a famous single equation model which links a wage to schooling and experience in labor market.
 
 $$lnw = f(s,x) = \beta_0 + ps + \beta_1x + \beta_2x^2$$
 
@@ -109,18 +111,42 @@ Mincer equation will serve as a basis upon which I plan to develop and refine ad
 
 ### Data
 
-In the sample, we have 1399 individuals in the "financial managers" occupation, of whom 71% hold a college degree. The dependent variable is the natural logarithm of earnings per hour, calculated as the ratio of weekly earnings to usual hours worked. Regarding the education variable, the data employs a credential-oriented measure. To align with the model, I transformed the variable into years of schooling, using standard durations for the obtained degrees. For instance, a PhD degree is considered equivalent to 22 years of schooling, MA degree to 18 years of schooling, etc. Years of potential experience are computed as the difference between current age and the age of potential entry into the labor market. This calculation assumes that individuals without a high school degree enter the labor force at age 17, those with a high school degree at 19, those with some college at 21, and those with a college degree at 23.
+In the sample, we have 1399 individuals in the "financial managers" occupation, of whom 71% hold a college degree. The dependent variable is the natural logarithm of earnings per hour, calculated as the ratio of weekly earnings to usual hours worked. Regarding the education variable, the data employs a credential-oriented measure. To align with the model, I transformed the variable into years of schooling, using standard duration for the obtained degrees. For example, a PhD degree is considered equivalent to 22 years of schooling, MA degree to 18 years of schooling, etc. Years of potential experience are computed as the difference between current age and the age of potential entry into the labor market. This calculation assumes that individuals without a high school degree enter the labor force at age 17, those with a high school degree at 19, those with some college at 21, and those with a college degree at 23. see @borjas2003
+
+```{r include=FALSE}
+# figire1
+
+p1 <- ggplot(data = sample, aes(x = educ, y = log_wage)) +
+  geom_jitter(width = 0.08,color = "azure4", size = 1.5,  shape = 16, alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  geom_smooth(method="loess", color="blueviolet", se=F, size=0.8, na.rm=T)+
+  labs(x = "Education (years)", y = "ln(Hourly wage, US dollars)") + theme_linedraw() 
+
+p2 <- ggplot(data = sample, aes(x = exper, y = log_wage)) +
+  geom_jitter(width = 0.08,color = "azure4", size = 1.5,  shape = 16, alpha = 0.5, show.legend=FALSE, na.rm=TRUE) +
+  geom_smooth(method="loess", color="blueviolet", se=F, size=0.8, na.rm=T)+
+  labs(x = "Experience (years)", y = "ln(Hourly wage, US dollars)") + theme_linedraw() 
+
+graph1 <- grid.arrange(p1, p2, ncol=2)
+ggsave("graphs/graph1.png",plot = graph1, width = 10, height = 5, units = "in", dpi = 300)
+```
 
 ![Log hourly wage, education and experience](graphs/graph1.png){fig-align="center" width="611"}
 
 To check whether functional form suggested by theory is consistent with the data, I estimated a lowess regression and plotted together with the scatterplot (see Figure 1). According to the pattern uncovered by lowess, earnings increase with each additional year of schooling and experience indeed showing the concave pattern. The standard regression table of the model is presented in Table 1.
+
+```{r include=FALSE}
+# Table 1 regression of log_wage on educ, exper and summarize results
+regression_1 <- lm(log_wage ~ educ + exper + expersq, data = sample)
+summary(regression_1)  
+coeftest(regression_1, vcov = sandwich)
+```
 
 ```{=tex}
 \begin{table}[ht]
 \caption{Wage baseline regression} 
 \vspace*{3mm}
 \centering 
-\begin{tabular}{l c } 
+\begin{tabular}{l r } 
 \hline\hline 
  & Ln wage \\ [0.5ex] 
 \hline 
@@ -139,3 +165,158 @@ Adjusted R-squared & 0.25 \\
 \end{table}
 ```
 The OLS regression of log hourly wage to year of schooling and experience implies that 1 year of additional schooling is associated with 9.6% increase in monthly wage for financial managers. Both figures and regression give evidence supporting the argument that education and experience may play an important role in the wage determination. Note, however, all correlations should be interpreted with caution and shouldn't be given causal interpretation. The positive correlation between wage and education can reflect unobserved family and individual heterogeneity.
+
+### Four regression models
+
+I have specified four linear regression models for predicting hourly wage of financial managers.\
+The Model 1 is our baseline Mincer equation capturing established factors influencing wages. Building upon this foundation, I introduce three subsequent models, each incorporating additional variables used in the literature to enhance the predictive capacity (see Appendix for graphs and evidence)
+
+```{=tex}
+\begin{table}[ht]
+\caption{Wage baseline regression} 
+\vspace*{3mm}\centering 
+\begin{tabular}{l r } 
+\hline\hline Model No. & Used variables \\ 
+[0.5ex] 
+\hline 
+Model 1 & education, experience, experience squared \vspace{1mm}\\
+Model 2 & Model 1 + male, married, black  \vspace{1.5mm}\\
+Model 3 & Model 2 + dummies for certain states and industries  \vspace{1.5mm}\\
+Model 4 & Model 3 + interaction terms \vspace{1.5mm}\\
+\hline
+\end{tabular}
+\end{table}
+```
+Model 2 augments the baseline Mincer equation by introducing demographic features such as gender, race, and marital status. These variables are crucial predictors, capturing disparities like well documented gender-based wage gaps and the influence of race and marital status on career opportunities. Model 3 enhances the Mincer equation by including data on the highest and lowest paying states and industries. This addition is crucial as it captures geographic and industry-specific factors influencing wage variations. Model 4 adds interaction terms to the previous model. The results are presented at Table 3.
+
+```{r include=FALSE}
+# Linear regressions in logs
+# Model 1: Linear regression on age
+model1log <- as.formula(log_wage ~ educ + exper + expersq)
+# Models 2-4: 
+model2log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + no_child + native_born_us)
+model3log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + no_child + native_born_us + top_states+low_states+hard_workers+top_industry)
+model4log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + no_child +native_born_us + top_states+low_states+hard_workers+top_industry + black*male + married*male + top_states*top_industry,low_states*top_industry+male*no_child + educ*male + educ*black)
+reg1log <- lm(model1log, data=sample)
+reg2log <- lm(model2log, data=sample)
+reg3log <- lm(model3log, data=sample)
+reg4log <- lm(model4log, data=sample)
+# evaluation of the models
+models <- c("reg1log", "reg2log","reg3log", "reg4log")
+AIC <- c()
+BIC <- c()
+RMSE <- c()
+RSquared <- c()
+regr <- c()
+k <- c()
+
+for ( i in 1:length(models)){
+  AIC[i] <- AIC(get(models[i]))
+  BIC[i] <- BIC(get(models[i]))
+  RMSE[i] <- RMSE(predict(get(models[i])), get(models[i])$model$log_wage)
+  RSquared[i] <-summary(get(models[i]))$r.squared
+  regr[[i]] <- coeftest(get(models[i]), vcov = sandwich)
+  k[i] <- get(models[i])$rank -1
+}
+
+############################################################
+# Linear regression evaluation
+# All models
+eval <- data.frame(models, k, RSquared, RMSE, BIC)
+eval <- eval %>%
+  mutate(models = paste0("(",gsub("reg","",models),")")) %>%
+  rename(Model = models, "R-squared" = RSquared, "Training RMSE" = RMSE, "N predictors" = k)
+stargazer(eval, summary = F, digits=2, float = F, no.space = T)
+```
+
+```{=tex}
+\begin{table}[ht]
+\caption{Wage models and measures of fit} 
+\vspace*{3mm}\centering 
+\begin{tabular}{@{\extracolsep{5pt}} cccccc} 
+\\[-1.8ex]
+\hline 
+\hline \\[-1.8ex] 
+ & Model & N predictors & R-squared & Training RMSE & BIC \\ 
+\hline \\[-1.8ex] 
+  & Model 1 & $3$ & $0.25$ & $0.456$ & $1,810.29$ \\ 
+  & Model 2 & $8$ & $0.30$ & $0.442$ & $1,760.30$ \\ 
+  & Model 3 & $12$ & $0.31$ & $0.437$ & $1,757.15$ \\ 
+  & Model 4 & $15$ & $0.32$ & $0.436$ & $1,770.64$ \\ 
+\hline \\[-1.8ex] 
+\end{tabular} 
+\end{table}
+```
+Referring to Table 3, both Model 2 - 3 have comparable RMSE, however the Model 3 had the lowest BIC (1757.15) which suggest that it has better prediction properties compared to other models. \
+In addition, I cross-validate using 4-fold-cross-validation.
+
+```{r include=FALSE}
+
+# Cross-validation
+# set number of folds (4 because of small sample)
+k <- 4
+# need to set the same seed again and again
+set.seed(081123)
+cv1log <- train(model1log, sample, method = "lm", trControl = trainControl(method = "cv", number = k))
+set.seed(081123)
+cv2log <- train(model2log, sample, method = "lm", trControl = trainControl(method = "cv", number = k))
+set.seed(081123)
+cv3log <- train(model3log, sample, method = "lm", trControl = trainControl(method = "cv", number = k), na.action = "na.omit")
+set.seed(081123)
+cv4log <- train(model4log, sample, method = "lm", trControl = trainControl(method = "cv", number = k), na.action = "na.omit")
+
+# calculate average rmse
+cv <- c("cv1log", "cv2log", "cv3log", "cv4log")
+rmse_cv <- c()
+
+for(i in 1:length(cv)){
+  rmse_cv[i] <- sqrt((get(cv[i])$resample[[1]][1]^2 +
+                        get(cv[i])$resample[[1]][2]^2 +
+                        get(cv[i])$resample[[1]][3]^2 +
+                        get(cv[i])$resample[[1]][4]^2)/4)
+}
+
+
+# summarize results
+cv_matlog <- data.frame(rbind(cv1log$resample[4], "Average"),
+                        rbind(cv1log$resample[1], rmse_cv[1]),
+                        rbind(cv2log$resample[1], rmse_cv[2]),
+                        rbind(cv3log$resample[1], rmse_cv[3]),
+                        rbind(cv4log$resample[1], rmse_cv[4])
+)
+
+colnames(cv_matlog)<-c("Resample","Model1log", "Model2log", "Model3log", "Model4log")
+cv_matlog
+
+stargazer(cv_matlog, summary = F, digits=3, float=F, sep="")
+
+```
+
+```{=tex}
+\begin{table}[ht]
+\caption{Wage models estimated and evaluated using 4-fold cross-validation and RMSE} 
+\vspace*{3mm}\centering 
+\begin{tabular}{@{\extracolsep{5pt}} ccccc} \\[-1.8ex]
+\hline 
+\hline \\[-1.8ex] 
+ Fold No. & Model 1 & Model 2 & Model 3 & Model 4 \\ 
+\hline
+Fold1 & $0.434$ & $0.413$ & $0.412$ & $0.411$ \\ 
+Fold2 & $0.459$ & $0.450$ & $0.446$ & $0.446$ \\ 
+Fold3 & $0.473$ & $0.460$ & $0.460$ & $0.458$ \\ 
+Fold4 & $0.465$ & $0.459$ & $0.450$ & $0.452$ \\ 
+Average & $0.458$ & $0.446$ & $0.442$ & $0.442$ \\ 
+\hline \\[-1.8ex] 
+\end{tabular}
+\end{table}
+```
+Referring to Table 4, Both Model 3 and Model 4 have the lowest average RMSE, therefore it is consistent with the previous studies where usually both BIC and cross-validation find the same model to be the best. Since Model 3 has the lowest BIC and average RMSE and less complicated compare to Model 4, we choose the model as the best one.
+
+# References
+
+<div id="refs"></div>
+
+# Appendix
+
+```{r include=FALSE}
+

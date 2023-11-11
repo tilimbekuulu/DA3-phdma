@@ -29,10 +29,11 @@ coeftest(regression_1, vcov = sandwich)
 # Model 1: Linear regression on age
 model1log <- as.formula(log_wage ~ educ + exper + expersq)
 # Models 2-4: 
-model2log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + black*male)
-model3log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + black*male + top_states + top_industry + low_states)
-model4log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + black*male + 
-                          top_states + top_industry + low_states  + top_states*top_industry+ low_states*top_industry)
+model2log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black)
+model3log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + top_states + top_industry + low_states)
+model4log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + black*male +
+                          top_states + top_industry + low_states  + top_states*top_industry+ low_states*top_industry+
+                          married*male + black*top_states + black*top_industry + black*low_states + union*top_states + union*top_industry + union*low_states )
 reg1log <- lm(model1log, data=sample)
 reg2log <- lm(model2log, data=sample)
 reg3log <- lm(model3log, data=sample)
@@ -67,7 +68,7 @@ eval <- data.frame(models, k, RSquared, RMSE, BIC)
 eval <- eval %>%
   mutate(models = paste0("(",gsub("reg","",models),")")) %>%
   rename(Model = models, "R-squared" = RSquared, "Training RMSE" = RMSE, "N predictors" = k)
-#stargazer(eval, summary = F, digits=2, float = F, no.space = T)
+stargazer(eval, summary = F, digits=2, float = F, no.space = T)
 
 # Cross-validation
 
@@ -115,7 +116,20 @@ cv_matlog
 
 
 
+regression_1 <- lm(log_wage ~ educ + exper + expersq + male + male*no_child + married + black + black*male + black*no_child,  data = sample)
+summary(regression_1)  
 
+
+# group by industry and calculate mean log wage and count
+table <- sample %>%
+  group_by(uhours) %>%
+  summarise(mean_log_wage = mean(log_wage, na.rm = TRUE), count = n()) %>%
+  arrange(desc(mean_log_wage))
+
+
+# create a bin for uhours varaible
+
+sample$hard_workers <- ifelse(sample$uhours >= 40, 1, 0)
 
 
 
