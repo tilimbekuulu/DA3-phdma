@@ -1,138 +1,91 @@
-library("lmtest")
-library("sandwich")
-
-# graph1 
-
 p1 <- ggplot(data = sample, aes(x = educ, y = log_wage)) +
-  geom_jitter(width = 0.08,color = "blue", size = 1.5,  shape = 16, alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
-  geom_smooth(method="loess", color="darkorange1", se=F, size=0.8, na.rm=T)+
+  geom_jitter(width = 0.08,color = "azure4", size = 1.5,  shape = 16, alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  geom_smooth(method="loess", color="blueviolet", se=F, size=0.8, na.rm=T)+
   labs(x = "Education (years)", y = "ln(Hourly wage, US dollars)") + theme_linedraw() 
 
-
 p2 <- ggplot(data = sample, aes(x = exper, y = log_wage)) +
-  geom_jitter(width = 0.08,color = "blue", size = 1.5,  shape = 16, alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
-  geom_smooth(method="loess", color="darkorange1", se=F, size=0.8, na.rm=T)+
+  geom_jitter(width = 0.08,color = "azure4", size = 1.5,  shape = 16, alpha = 0.5, show.legend=FALSE, na.rm=TRUE) +
+  geom_smooth(method="loess", color="blueviolet", se=F, size=0.8, na.rm=T)+
   labs(x = "Experience (years)", y = "ln(Hourly wage, US dollars)") + theme_linedraw() 
 
- graph1 <- grid.arrange(p1, p2, ncol=2)
-
+graph1 <- grid.arrange(p1, p2, ncol=2)
 ggsave("graphs/graph1.png",plot = graph1, width = 10, height = 5, units = "in", dpi = 300)
 
+# graph2 boxplot
+p3 <- ggplot(data = sample, aes(x = as.factor(male), y = hourly_wage)) +
+  geom_boxplot(color = "blueviolet",  alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  labs( y = "ln(Hourly wage, US dollars)", x = " ") + 
+  scale_x_discrete(labels = c("Female", "Male"))+
+  theme_linedraw()
 
-# Table 1 regression of log_wage on educ, exper and summarize results
-regression_1 <- lm(log_wage ~ educ + exper + expersq, data = sample)
-summary(regression_1)  
-coeftest(regression_1, vcov = sandwich)
+p4 <- ggplot(data = sample, aes(x = as.factor(black), y = hourly_wage)) +
+  geom_boxplot(color = "blueviolet",  alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  labs( y = "ln(Hourly wage, US dollars)", x = " ") + 
+  scale_x_discrete(labels = c("Not Black", "Black"))+
+  theme_linedraw()
 
-# Linear regressions in logs now
+p5 <- ggplot(data = sample, aes(x = as.factor(married), y = hourly_wage)) +
+  geom_boxplot(color = "blueviolet",  alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  labs( y = "ln(Hourly wage, US dollars)", x = " ") + 
+  scale_x_discrete(labels = c("Not Married", "Married"))+
+  theme_linedraw()
 
-# Model 1: Linear regression on age
-model1log <- as.formula(log_wage ~ educ + exper + expersq)
-# Models 2-4: 
-model2log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black)
-model3log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + top_states + top_industry + low_states)
-model4log <- as.formula(log_wage ~ educ + exper + expersq + male + married + black + black*male +
-                          top_states + top_industry + low_states  + top_states*top_industry+ low_states*top_industry+
-                          married*male + black*top_states + black*top_industry + black*low_states + union*top_states + union*top_industry + union*low_states )
-reg1log <- lm(model1log, data=sample)
-reg2log <- lm(model2log, data=sample)
-reg3log <- lm(model3log, data=sample)
-reg4log <- lm(model4log, data=sample)
+graph2 <- grid.arrange(p3, p4, p5, ncol=3)
+ggsave("graphs/graph2.png",plot = graph2, width = 10, height = 5, units = "in", dpi = 300)
 
-
-# evaluation of the models
-
-models <- c("reg1log", "reg2log","reg3log", "reg4log")
-AIC <- c()
-BIC <- c()
-RMSE <- c()
-RSquared <- c()
-regr <- c()
-k <- c()
-
-for ( i in 1:length(models)){
-  AIC[i] <- AIC(get(models[i]))
-  BIC[i] <- BIC(get(models[i]))
-  RMSE[i] <- RMSE(predict(get(models[i])), get(models[i])$model$log_wage)
-  RSquared[i] <-summary(get(models[i]))$r.squared
-  regr[[i]] <- coeftest(get(models[i]), vcov = sandwich)
-  k[i] <- get(models[i])$rank -1
-}
-
-############################################################
-# Linear regression evaluation
+stargazer(reg1log, reg2log, reg3log)
 
 
-# All models
-eval <- data.frame(models, k, RSquared, RMSE, BIC)
-eval <- eval %>%
-  mutate(models = paste0("(",gsub("reg","",models),")")) %>%
-  rename(Model = models, "R-squared" = RSquared, "Training RMSE" = RMSE, "N predictors" = k)
-stargazer(eval, summary = F, digits=2, float = F, no.space = T)
+# Prediction
+data <- sample %>% dplyr::select(educ,exper,expersq,male,married,black, no_child,native_born_us,
+                                 top_states,low_states,hard_workers,top_industry,log_wage)
+# Add new observation
+new <- list(educ = 18, exper = 11, expersq = 121,male = 1,married = 0,black = 1, no_child = 1,native_born_us = 1,
+            top_states = 1,low_states = 0,hard_workers = 1,top_industry = 1, log_wage=NA)
+reg3 <- lm(log_wage ~ educ + exper + expersq + male + married + black + no_child + native_born_us + 
+             top_states+low_states+hard_workers+top_industry, data=data)
+summary(reg3)
+# prediction
+data$lnp2 <- predict(reg3, data)
+rmse3 <- RMSE(data$lnp2,data$log_wage)
 
-# Cross-validation
+# prediction for new observation
+predln_new <- predict(reg3, newdata = new,se.fit = TRUE, interval = "prediction")
+predln_new80 <- predict(reg3, newdata = new,se.fit = TRUE, interval = "prediction", level=0.90)
+predln_new80
+lnp2_new <- predln_new$fit[[1]]
 
-# set number of folds (4 because of small sample)
-k <- 4
+# predictions in levels
+data$lnplev <- exp(data$lnp2)*exp((rmse3^2)/2)
+lnp2_new_lev <- exp(lnp2_new)*exp((rmse3^2)/2)
 
-# need to set the same seed again and again
-set.seed(081123)
-cv1log <- train(model1log, sample, method = "lm", trControl = trainControl(method = "cv", number = k))
-set.seed(081123)
-cv2log <- train(model2log, sample, method = "lm", trControl = trainControl(method = "cv", number = k))
-set.seed(081123)
-cv3log <- train(model3log, sample, method = "lm", trControl = trainControl(method = "cv", number = k), na.action = "na.omit")
-set.seed(081123)
-cv4log <- train(model4log, sample, method = "lm", trControl = trainControl(method = "cv", number = k), na.action = "na.omit")
+# prediction intervals (log and level)
+lnp2_PIlow <- predln_new$fit[2]
+lnp2_PIhigh <- predln_new$fit[3]
+lnplev_PIlow <- exp(lnp2_PIlow)*exp(rmse3^2/2)
+lnplev_PIhigh <- exp(lnp2_PIhigh)*exp(rmse3^2/2)
 
-# calculate average rmse
-cv <- c("cv1log", "cv2log", "cv3log", "cv4log")
-rmse_cv <- c()
+#80%
+lnp2_PIlow80 <- predln_new80$fit[2]
+lnp2_PIhigh80 <- predln_new80$fit[3]
+lnplev_PIlow80 <- exp(lnp2_PIlow80)*exp(rmse3^2/2)
+lnplev_PIhigh80 <- exp(lnp2_PIhigh80)*exp(rmse3^2/2)
 
-for(i in 1:length(cv)){
-  rmse_cv[i] <- sqrt((get(cv[i])$resample[[1]][1]^2 +
-                        get(cv[i])$resample[[1]][2]^2 +
-                        get(cv[i])$resample[[1]][3]^2 +
-                        get(cv[i])$resample[[1]][4]^2)/4)
-}
+# summary of predictions and PI
+sum <- matrix( c( lnp2_new, lnp2_PIlow ,lnp2_PIhigh,
+                  lnp2_new_lev, lnplev_PIlow, lnplev_PIhigh) , nrow = 3 ,ncol = 2)
 
+colnames(sum) <- c('Model in logs', 'Recalculated to level')
+rownames(sum) <- c('Predicted', 'PI_low', 'PI_high')
+sum
 
-# summarize results
-cv_matlog <- data.frame(rbind(cv1log$resample[4], "Average"),
-                        rbind(cv1log$resample[1], rmse_cv[1]),
-                        rbind(cv2log$resample[1], rmse_cv[2]),
-                        rbind(cv3log$resample[1], rmse_cv[3]),
-                        rbind(cv4log$resample[1], rmse_cv[4])
-)
+sum <- matrix( c( lnp2_new, lnp2_PIlow80 ,lnp2_PIhigh80,
+                  lnp2_new_lev, lnplev_PIlow80, lnplev_PIhigh80) , nrow = 3 ,ncol = 2)
 
-colnames(cv_matlog)<-c("Resample","Model1log", "Model2log", "Model3log", "Model4log")
-cv_matlog
+colnames(sum) <- c('Model in logs', 'Recalculated to level')
+rownames(sum) <- c('Predicted', 'PI_low 80%', 'PI_high 80%')
 
-#stargazer(cv_matlog, summary = F, digits=3, float=F, out=paste(output,"Ch14_cvmatlog_R.tex",sep=""))
-#stargazer(cv_matlog, summary = F, digits=3, float=F, type="text",  out=paste(output,"Ch14_cvmatlog_R.txt",sep=""))
-
-
-
-
-
-
-regression_1 <- lm(log_wage ~ educ + exper + expersq + male + male*no_child + married + black + black*male + black*no_child,  data = sample)
-summary(regression_1)  
-
-
-# group by industry and calculate mean log wage and count
-table <- sample %>%
-  group_by(uhours) %>%
-  summarise(mean_log_wage = mean(log_wage, na.rm = TRUE), count = n()) %>%
-  arrange(desc(mean_log_wage))
-
-
-# create a bin for uhours varaible
-
-sample$hard_workers <- ifelse(sample$uhours >= 40, 1, 0)
-
-
-
+stargazer(sum, type = "latex", float=F, digits=2)
 
 
 
