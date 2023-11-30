@@ -1,0 +1,26 @@
+---
+title: "Technical Report"
+author: "Talgat Ilimbek uulu"
+format: html
+editor: visual
+---
+
+## Sample Design: Key Decisions
+
+After reviewing the data, I decided to restrict the price variable to be less than or equal to 650 AUD per night which consist of 96% of listings. The main reason is that there are some listing with the unusually high prices (max is 28000 dollars per night). I randomly checked some of them and found that there are considerable number of mistakes. The average daily rental price after filtering is consistent with the approximate average price of 195 AUD per night reported for example by [Hosty](https://www.hostyapp.com/the-profitability-of-investing-in-the-airbnb-market-in-sydney/).
+
+
+## Running Code
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).

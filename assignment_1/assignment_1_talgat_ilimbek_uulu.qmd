@@ -473,5 +473,3 @@ ggsave("graphs/graph3.png",plot = graph3, width = 10, height = 5, units = "in", 
 ```
 
 ![Hourly wage distribution by important regional and industry features](graphs/graph3.png){fig-align="center" width="523"}
-
-
