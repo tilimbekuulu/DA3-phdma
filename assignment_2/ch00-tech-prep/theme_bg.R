@@ -39,7 +39,9 @@ library(scales)
 # color <- c("#3D4D8AFF",            "#43BF71FF",            "#440154FF",            "#FDE725FF",            "#23888EFF" )
 
 # this is derived from CMYK color scheme by Cambridge University Press for print
-color <- c("#1978a5", "#1b6535", "#e52165", "#e8d21d", "#2f9aa0FF")
+
+color <- c("#3a5e8cFF", "#10a53dFF", "#541352FF", "#ffcf20FF", "#2f9aa0FF")
+#color <- c("#1978a5", "#1b6535", "#e52165", "#e8d21d", "#2f9aa0FF")
 #blue  #3a5e8c   # purple #541352    teal #2f9aa0  yellow #ffcf20   # green #10a53d
 show_col(color)
 

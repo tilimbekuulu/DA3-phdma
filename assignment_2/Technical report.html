@@ -101,25 +101,152 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 </header>
 
+<section id="guide-through-the-files" class="level2">
+<h2 class="anchored" data-anchor-id="guide-through-the-files">Guide through the files</h2>
+<p>All the codes are located in the r_codes folder</p>
+<ul>
+<li><strong>cleaner_sydney.R</strong> The code uploads the raw data, cleans it and saves the cleaned data as <em>airbnb_sydney_cleaned.csv</em>. If you want to explore the data cleaning process please refer to the file.</li>
+<li><strong>regression_sydney.R</strong> The code uses the airbnb_sydney_cleaned.csv as an input and performs all the necessary regressions.</li>
+<li><strong>random_forests_boosting.R</strong> The code uses airbnb_sydney_cleaned.csv as an input and performs random forest and GBM</li>
+</ul>
+</section>
 <section id="sample-design-key-decisions" class="level2">
 <h2 class="anchored" data-anchor-id="sample-design-key-decisions">Sample Design: Key Decisions</h2>
-<p>After reviewing the data, I decided to restrict the price variable to be less than or equal to 650 AUD per night which consist of 97% of listings. The main reason is that there are some listing with unusually high prices (max is 25000 dollars per night). I randomly checked some then and found that they is considerable number of mistakes. The average daily rental price after filtering is consistent with the approximate average price of 195 AUD per night reported for example by <a href="https://www.hostyapp.com/the-profitability-of-investing-in-the-airbnb-market-in-sydney/">Hosty</a>.</p>
+<ul>
+<li><p>After reviewing the data, I decided to restrict the price variable to be less than or equal to 650 AUD per night which consist of 96% of listings. The main reason is that there are some listing with the unusually high prices (max is 28000 dollars per night). I randomly checked some of them and found that there are considerable number of mistakes. The average daily rental price after filtering is consistent with the approximate average price of 195 AUD per night reported for example by <a href="https://www.hostyapp.com/the-profitability-of-investing-in-the-airbnb-market-in-sydney/">Hosty</a>.</p></li>
+<li><p>Moreover some of the key variables were imputed as follows:</p></li>
+</ul>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>    <span class="co">#imputation</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    data <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>      <span class="fu">mutate</span>(</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_bath_count =</span>  <span class="fu">ifelse</span>(<span class="fu">is.na</span>(n_bath_count), <span class="fu">median</span>(n_bath_count, <span class="at">na.rm =</span> T), n_bath_count), <span class="co">#assume at least 1 bath</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        <span class="at">f_bathroom=</span><span class="fu">ifelse</span>(<span class="fu">is.na</span>(f_bathroom),<span class="dv">1</span>, f_bathroom),</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_beds =</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(n_beds), n_accommodates, n_beds), <span class="co"># bed = accommodates</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_beds2 =</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(n_beds2), n_accommodates<span class="sc">^</span><span class="dv">2</span>, n_beds2), </span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_bedroom_count =</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(n_bedroom_count), <span class="dv">1</span>, n_bedroom_count), <span class="co"># assume at least 1 bedroom</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>      )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<ul>
+<li>In order to improve stability of the model several numerical variables were pooled, see the example code below:</li>
+</ul>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Pool number of amenities</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co"># table by grouping amenities</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>table_amenities <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(n_amenities_count) <span class="sc">%&gt;%</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_price =</span> <span class="fu">mean</span>(price), <span class="at">min_price=</span> <span class="fu">min</span>(price), <span class="at">max_price =</span> <span class="fu">max</span>(price), <span class="at">n =</span> <span class="fu">n</span>())</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> data <span class="sc">%&gt;%</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">f_amenities_count=</span> <span class="fu">cut</span>(n_amenities_count, <span class="fu">c</span>(<span class="dv">0</span>,<span class="dv">10</span>,<span class="dv">15</span>,<span class="dv">200</span>), <span class="at">labels=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">2</span>,<span class="dv">3</span>), <span class="at">right =</span> F))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<ul>
+<li>As a result of initial cleaning of the data the final dataset consists of 18 709 observations and 48 variables. For more detailed steps and additional graphs please refer to the cleaner_sydney.R file in the r_codes folder</li>
+</ul>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="graphs/price_g2.png" class="img-fluid figure-img" width="500"></p>
+<figcaption class="figure-caption">Airbnb Price distributution</figcaption>
+</figure>
+</div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="graphs/g5.png" class="img-fluid figure-img" width="500"></p>
+<figcaption class="figure-caption">Airbnb Price by property and room type</figcaption>
+</figure>
+</div>
 </section>
-<section id="running-code" class="level2">
-<h2 class="anchored" data-anchor-id="running-code">Running Code</h2>
+<section id="model-selection" class="level2">
+<h2 class="anchored" data-anchor-id="model-selection">Model Selection</h2>
+<p>I estimated eight regression models with the following specifications and as reported the Model 4 was chosen as the best model</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dv">1</span> <span class="sc">+</span> <span class="dv">1</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<div class="cell-output cell-output-stdout">
-<pre><code>[1] 2</code></pre>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Model building: Regression</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Basic Variables</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>basic_lev  <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"n_accommodates"</span>,<span class="st">"n_beds"</span>,<span class="st">"n_bedroom_count"</span>, <span class="st">"f_room_type"</span>)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Factorized variables</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>basic_add <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"f_bathroom"</span>,<span class="st">"f_minimum_nights"</span>,<span class="st">"f_neighbourhood_cleansed"</span>)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>reviews <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"f_number_of_reviews"</span>,<span class="st">"d_host_is_superhost"</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>             <span class="st">"d_host_has_profile_pic"</span>,<span class="st">"d_host_identity_verified"</span>,<span class="st">"d_instant_bookable"</span>)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Higher orders</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>poly_lev <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"n_accommodates2"</span>, <span class="st">"n_amenities_count2"</span>, <span class="st">"n_beds2"</span>)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co"># amenities</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>amenities <span class="ot">&lt;-</span>  <span class="fu">grep</span>(<span class="st">"^d_.*"</span>, <span class="fu">names</span>(data), <span class="at">value =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co"># delete from amenities vector first 3 columns</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>amenities <span class="ot">&lt;-</span> amenities[<span class="sc">-</span><span class="fu">c</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>)]</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>X1  <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"f_room_type*d_private_balcony"</span>, <span class="st">"f_room_type*d_view"</span>,<span class="st">"f_room_type*f_neighbourhood_cleansed"</span>,</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>         <span class="st">"f_property_type*f_neighbourhood_cleansed"</span>)</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Additional interactions of factors and dummies</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>X2  <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"d_netflix*f_room_type"</span>,<span class="st">"d_bathtub*f_room_type"</span>, <span class="st">"d_outdoor_furniture*f_room_type"</span>)</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>X3  <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">paste0</span>(<span class="st">"(f_property_type + f_room_type ) * ("</span>,</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>                <span class="fu">paste</span>(amenities, <span class="at">collapse=</span><span class="st">" + "</span>),<span class="st">")"</span>))</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Create models in levels models: 1-8</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>modellev1 <span class="ot">&lt;-</span> <span class="st">" ~ n_accommodates"</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>modellev2 <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">" ~ "</span>,<span class="fu">paste</span>(basic_lev,<span class="at">collapse =</span> <span class="st">" + "</span>))</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>modellev3 <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">" ~ "</span>,<span class="fu">paste</span>(<span class="fu">c</span>(basic_lev, basic_add,reviews),<span class="at">collapse =</span> <span class="st">" + "</span>))</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>modellev4 <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">" ~ "</span>,<span class="fu">paste</span>(<span class="fu">c</span>(basic_lev,basic_add,reviews,poly_lev),<span class="at">collapse =</span> <span class="st">" + "</span>))</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>modellev5 <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">" ~ "</span>,<span class="fu">paste</span>(<span class="fu">c</span>(basic_lev,basic_add,reviews,poly_lev,X1),<span class="at">collapse =</span> <span class="st">" + "</span>))</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>modellev6 <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">" ~ "</span>,<span class="fu">paste</span>(<span class="fu">c</span>(basic_lev,basic_add,reviews,poly_lev,X1,X2),<span class="at">collapse =</span> <span class="st">" + "</span>))</span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>modellev7 <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">" ~ "</span>,<span class="fu">paste</span>(<span class="fu">c</span>(basic_lev,basic_add,reviews,poly_lev,X1,X2,amenities),<span class="at">collapse =</span> <span class="st">" + "</span>))</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>modellev8 <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">" ~ "</span>,<span class="fu">paste</span>(<span class="fu">c</span>(basic_lev,basic_add,reviews,poly_lev,X1,X2,amenities,X3),<span class="at">collapse =</span> <span class="st">" + "</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
+<p>The following graphs show some of the diagnostics an summary</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="graphs/model_results.png" class="img-fluid figure-img" width="500"></p>
+<figcaption class="figure-caption">RMSE Training and Test Set for the Regression models</figcaption>
+</figure>
 </div>
-<p>You can add options to executable code like this</p>
+<p>To see how model predictions compare to the actual values, I plotted the predicted prices of the best model (Model 4) against the actual prices.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="graphs/level_vs_pred.png" class="img-fluid figure-img" width="500"></p>
+<figcaption class="figure-caption">Model Prediction</figcaption>
+</figure>
+</div>
+<p>As we can see the model dows a good job in predicting low values but it is not very accurate for high values. This is not surprising as it common for linear models to have a problem with predicting extreme values.</p>
+<p>I addition to regression models I also estimated a random forest model and GBM model. The codes are reported below:</p>
 <div class="cell">
-<div class="cell-output cell-output-stdout">
-<pre><code>[1] 4</code></pre>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># GBM  -------------------------------------------------------</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>gbm_grid <span class="ot">&lt;-</span>  <span class="fu">expand.grid</span>(<span class="at">interaction.depth =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">5</span>, <span class="dv">10</span>), <span class="co"># complexity of the tree</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">n.trees =</span> (<span class="dv">4</span><span class="sc">:</span><span class="dv">10</span>)<span class="sc">*</span><span class="dv">50</span>, <span class="co"># number of iterations, i.e. trees</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">shrinkage =</span> <span class="fl">0.1</span>, <span class="co"># learning rate: how quickly the algorithm adapts</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>                         <span class="at">n.minobsinnode =</span> <span class="dv">20</span> <span class="co"># the minimum number of training set samples in a node to commence splitting</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1234</span>)</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="fu">system.time</span>({</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  gbm_model <span class="ot">&lt;-</span> <span class="fu">train</span>(<span class="fu">formula</span>(<span class="fu">paste0</span>(<span class="st">"price ~"</span>, <span class="fu">paste0</span>(predictors_2, <span class="at">collapse =</span> <span class="st">" + "</span>))),</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>                     <span class="at">data =</span> data_train,</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>                     <span class="at">method =</span> <span class="st">"gbm"</span>,</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>                     <span class="at">trControl =</span> train_control,</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>                     <span class="at">verbose =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>                     <span class="at">tuneGrid =</span> gbm_grid)</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>gbm_model</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="co"># Random Forest</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="co"># set tuning </span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>tune_grid <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">.mtry =</span> <span class="fu">c</span>(<span class="dv">8</span>, <span class="dv">10</span>, <span class="dv">12</span>),</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">.splitrule =</span> <span class="st">"variance"</span>,</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">.min.node.size =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">10</span>, <span class="dv">15</span>)</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1234</span>)</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a><span class="fu">system.time</span>({</span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  rf_model_2 <span class="ot">&lt;-</span> <span class="fu">train</span>(</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">formula</span>(<span class="fu">paste0</span>(<span class="st">"price ~"</span>, <span class="fu">paste0</span>(predictors_2, <span class="at">collapse =</span> <span class="st">" + "</span>))),</span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> data_train,</span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">method =</span> <span class="st">"ranger"</span>,</span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">trControl =</span> train_control,</span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">tuneGrid =</span> tune_grid,</span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">importance =</span> <span class="st">"impurity"</span></span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a>rf_model_2</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-</div>
-<p>The <code>echo: false</code> option disables the printing of code (only output is displayed).</p>
 </section>
 
 </main>
