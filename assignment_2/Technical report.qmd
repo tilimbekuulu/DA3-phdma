@@ -1,7 +1,7 @@
 ---
 title: "Technical Report"
 author: "Talgat Ilimbek uulu"
-format: html
+format: pdf
 editor: visual
 ---
 
@@ -21,13 +21,15 @@ All the codes are located in the r_codes folder
 
 ```{r eval=FALSE, include=TRUE}
     #imputation
-    data <- data %>%
-      mutate(
-        n_bath_count =  ifelse(is.na(n_bath_count), median(n_bath_count, na.rm = T), n_bath_count), #assume at least 1 bath
-        f_bathroom=ifelse(is.na(f_bathroom),1, f_bathroom),
-        n_beds = ifelse(is.na(n_beds), n_accommodates, n_beds), # bed = accommodates
-        n_beds2 = ifelse(is.na(n_beds2), n_accommodates^2, n_beds2), 
-        n_bedroom_count = ifelse(is.na(n_bedroom_count), 1, n_bedroom_count), # assume at least 1 bedroom
+data <- data %>%
+mutate(
+n_bath_count =  ifelse(is.na(n_bath_count), 
+median(n_bath_count, na.rm = T), n_bath_count), #assume at least 1 bath
+f_bathroom=ifelse(is.na(f_bathroom),1, f_bathroom),
+n_beds = ifelse(is.na(n_beds), n_accommodates, n_beds), # bed = accommodates
+n_beds2 = ifelse(is.na(n_beds2), n_accommodates^2, n_beds2), 
+n_bedroom_count = ifelse(is.na(n_bedroom_count), 1, n_bedroom_count),
+        # assume at least 1 bedroom
       )
 ```
 
@@ -38,9 +40,11 @@ All the codes are located in the r_codes folder
 # table by grouping amenities
 table_amenities <- data %>%
   group_by(n_amenities_count) %>%
-  summarise(mean_price = mean(price), min_price= min(price), max_price = max(price), n = n())
+  summarise(mean_price = mean(price), min_price= min(price), 
+  max_price = max(price), n = n())
 data <- data %>%
-  mutate(f_amenities_count= cut(n_amenities_count, c(0,10,15,200), labels=c(1,2,3), right = F))
+  mutate(f_amenities_count= cut(n_amenities_count, c(0,10,15,200), 
+                                labels=c(1,2,3), right = F))
 
 ```
 
@@ -69,21 +73,29 @@ amenities <-  grep("^d_.*", names(data), value = TRUE)
 # delete from amenities vector first 3 columns
 amenities <- amenities[-c(1:4)]
 
-X1  <- c("f_room_type*d_private_balcony", "f_room_type*d_view","f_room_type*f_neighbourhood_cleansed",
-         "f_property_type*f_neighbourhood_cleansed")
+X1  <- c("f_room_type*d_private_balcony", 
+"f_room_type*d_view","f_room_type*f_neighbourhood_cleansed",
+"f_property_type*f_neighbourhood_cleansed")
 # Additional interactions of factors and dummies
-X2  <- c("d_netflix*f_room_type","d_bathtub*f_room_type", "d_outdoor_furniture*f_room_type")
+X2  <- c("d_netflix*f_room_type","d_bathtub*f_room_type", 
+         "d_outdoor_furniture*f_room_type")
 X3  <- c(paste0("(f_property_type + f_room_type ) * (",
                 paste(amenities, collapse=" + "),")"))
 # Create models in levels models: 1-8
 modellev1 <- " ~ n_accommodates"
 modellev2 <- paste0(" ~ ",paste(basic_lev,collapse = " + "))
-modellev3 <- paste0(" ~ ",paste(c(basic_lev, basic_add,reviews),collapse = " + "))
-modellev4 <- paste0(" ~ ",paste(c(basic_lev,basic_add,reviews,poly_lev),collapse = " + "))
-modellev5 <- paste0(" ~ ",paste(c(basic_lev,basic_add,reviews,poly_lev,X1),collapse = " + "))
-modellev6 <- paste0(" ~ ",paste(c(basic_lev,basic_add,reviews,poly_lev,X1,X2),collapse = " + "))
-modellev7 <- paste0(" ~ ",paste(c(basic_lev,basic_add,reviews,poly_lev,X1,X2,amenities),collapse = " + "))
-modellev8 <- paste0(" ~ ",paste(c(basic_lev,basic_add,reviews,poly_lev,X1,X2,amenities,X3),collapse = " + "))
+modellev3 <- paste0(" ~ ",paste(c(basic_lev, basic_add,
+                                  reviews),collapse = " + "))
+modellev4 <- paste0(" ~ ",paste(c(basic_lev,basic_add,
+                           reviews,poly_lev),collapse = " + "))
+modellev5 <- paste0(" ~ ",paste(c(basic_lev,
+                           basic_add,reviews,poly_lev,X1),collapse = " + "))
+modellev6 <- paste0(" ~ ",paste(c(basic_lev,basic_add,reviews,
+                          poly_lev,X1,X2),collapse = " + "))
+modellev7 <- paste0(" ~ ",paste(c(basic_lev,basic_add,reviews,
+                           poly_lev,X1,X2,amenities),collapse = " + "))
+modellev8 <- paste0(" ~ ",paste(c(basic_lev,basic_add,reviews,
+                          poly_lev,X1,X2,amenities,X3),collapse = " + "))
 
 ```
 
@@ -103,14 +115,15 @@ I addition to regression models I also estimated a random forest model and GBM m
 # GBM  -------------------------------------------------------
 
 gbm_grid <-  expand.grid(interaction.depth = c(1, 5, 10), # complexity of the tree
-                         n.trees = (4:10)*50, # number of iterations, i.e. trees
-                         shrinkage = 0.1, # learning rate: how quickly the algorithm adapts
-                         n.minobsinnode = 20 # the minimum number of training set samples in a node to commence splitting
+ n.trees = (4:10)*50, # number of iterations, i.e. trees
+shrinkage = 0.1, # learning rate: how quickly the algorithm adapts
+n.minobsinnode = 20 # the minimum number of training set samples 
 )
 
 set.seed(1234)
 system.time({
-  gbm_model <- train(formula(paste0("price ~", paste0(predictors_2, collapse = " + "))),
+  gbm_model <- train(formula(paste0("price ~",
+                    paste0(predictors_2, collapse = " + "))),
                      data = data_train,
                      method = "gbm",
                      trControl = train_control,
