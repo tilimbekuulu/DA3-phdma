@@ -24,13 +24,22 @@ library(rpart)
 library(partykit)
 library(rpart.plot)
 
+library(grid)
+
 #location of folders
 data_in  <- "data/"
 data_out <- "clean_data/"
 
 # set data dir, load theme and functions
+# setwd("/Users/talgatilimbekuulu/Documents/ceu/prediction_gabor/DA3-phdma/assignment_3")
+
 source("ch00-tech-prep/theme_bg.R")
 source("ch00-tech-prep/da_helper_functions.R")
+
+# define output folder
+use_case_dir <- "/Users/talgatilimbekuulu/Documents/ceu/prediction_gabor/DA3-phdma/assignment_3/"
+output <- paste0(use_case_dir,"output/")
+
 
 # Import the data
 data <- read_csv(paste(data_in,"cs_bisnode_panel.csv", sep = "/"))
@@ -43,10 +52,6 @@ data <- data %>%
 ###########################################################
 # label engineering
 ###########################################################
-
-# add all missing year and comp_id combinations -
-data <- data %>%
-  complete(year, comp_id)
 
 # generate status_alive; if sales larger than zero and not-NA, then firm is alive
 data  <- data %>%
@@ -74,9 +79,9 @@ data <- data %>%
 
 table(data$exit_year, exclude = NULL)
 
-# dropping firms that exited in 1998 or earlier (these are clearly mistakes) 2 # observations
+# dropping firms that exited in 1998 or earlier (these are clearly mistakes, since they are active at 2012) 2 # observations
 data <- data %>% 
-filter(exit_year > 1998|is.na(exit_year) == TRUE)
+  filter(exit_year > 1998|is.na(exit_year) == TRUE)
 
 # new firms
 table(data$founded_year, exclude = NULL) # 1806 NAs
@@ -90,7 +95,7 @@ table(data$founded_year_extracted, exclude = NULL)# 2 NAs
 
 data <- data %>%
   mutate(age = (year - founded_year_extracted)) %>% 
-filter(age >= 0)
+  filter(age >= 0) # it cannot be negative (it would imply that the firm was founded after 2012)
 
 table(data$age, exclude = NULL)
 
@@ -99,7 +104,13 @@ data <- data %>%
   mutate(sales_mil = sales / 1000000) %>%
   # look at firms below 10m euro revenues and above 1000 euros
   filter(!(sales_mil > 10)) %>%
-  filter(!(sales_mil < 0.001))
+  filter(!(sales_mil < 0.001)) %>% 
+  mutate(sales_mil_log = log(sales_mil),sales_mil_log_sq=sales_mil_log^2)
+
+# new firms
+data <- data %>%
+  mutate(new = as.numeric(age <= 1) %>% #  (age could be 0,1 )
+           ifelse(balsheet_notfullyear == 1, 1, .))
 
 # change some industry category codes
 data <- data %>%
@@ -122,7 +133,6 @@ data <- data %>%
 
 #financial variables, create ratios
 ###########################################################
-
 # assets can't be negative. Change them to 0 and add a flag.
 data <-data  %>%
   mutate(flag_asset_problem=ifelse(intang_assets<0 | curr_assets<0 | fixed_assets<0,1,0  ))
@@ -184,5 +194,163 @@ variances<- data %>%
 
 data <- data %>%
   select(-one_of(names(variances)[variances]))
+
+########################################################################
+# additional
+# including some imputation
+########################################################################
+
+# CEO age
+data <- data %>%
+  mutate(ceo_age = year-birth_year,
+         flag_low_ceo_age = as.numeric(ceo_age < 25 & !is.na(ceo_age)),
+         flag_high_ceo_age = as.numeric(ceo_age > 75 & !is.na(ceo_age)),
+         flag_miss_ceo_age = as.numeric(is.na(ceo_age)))
+
+table(data$ceo_age, exclude = NULL)
+mean(data$ceo_age, na.rm = TRUE)
+
+data <- data %>%
+  mutate(ceo_age = ifelse(ceo_age < 25, 25, ceo_age) %>%
+           ifelse(. > 75, 75, .))
+# replace missing values in ceo_age with mean
+
+data <- data %>%
+  mutate(ceo_age = ifelse(is.na(ceo_age), 47, ceo_age),
+         ceo_young = as.numeric(ceo_age < 40))
+
+table(data$ceo_young, exclude = NULL)
+
+# number of labor avg count missing values
+table(is.na(data$labor_avg))
+# mean of labor_avg
+mean(data$labor_avg, na.rm = TRUE)
+
+data <- data %>%
+  mutate(labor_avg_mod = ifelse(is.na(labor_avg), 0.66, labor_avg),
+         flag_miss_labor_avg = as.numeric(is.na(labor_avg)))
+
+summary(data$labor_avg)
+summary(data$labor_avg_mod)
+
+data <- data %>%
+  select(-labor_avg)
+
+# create factors
+data <- data %>%
+  mutate(urban_m = factor(urban_m, levels = c(1,2,3)),
+         ind2_cat = factor(ind2_cat, levels = sort(unique(data$ind2_cat))))
+
+
+# creating a target variable based on sales growth if sales >= 0.50 then 1 else 0 use ifelse
+data <- data %>%
+  mutate(target = ifelse(growth >= 0.50, 1, 0))
+table(data$target) # 3608 firms with sales growth >= 50%
+
+# check data variables for NA's
+
+# no more imputation, drop obs if key vars missing
+data <- data %>%
+  filter(!is.na(liq_assets_bs),!is.na(foreign), !is.na(ind))
+# drop missing
+data <- data %>%
+  filter(!is.na(age),!is.na(foreign), !is.na(material_exp_pl), !is.na(m_region_loc))
+Hmisc::describe(data$age)
+
+# drop unused factor levels
+data <- data %>%
+  mutate_at(vars(colnames(data)[sapply(data, is.factor)]), funs(fct_drop))
+table(data$ind2_cat)
+
+# make target variable a factor with names of factor
+data <- data %>%
+  mutate(target_f = factor(target, levels = c(0,1), labels = c("nogrowth", "growth")))
+table(data$target_f)
+table(data$target)
+
+
+datasummary_skim(data, type='numeric', histogram = TRUE)
+datasummary_skim(data)
+
+
+## Some graphs""
+
+# Histograms
+sales_g <- ggplot(data, aes(sales_mil)) +
+  geom_histogram(binwidth = 0.15, fill = color[3], color = color.outline, alpha = 0.8, size = 0.25) +
+  ylab("Count") +
+  xlab("Sales (in million EUR)") +
+  theme_bg()
+
+logsales_g2 <- ggplot(data, aes(sales_mil_log)) +
+  geom_histogram(binwidth = 0.15, fill = color[3], color = color.outline, alpha = 0.8, size = 0.25) +
+  ylab("Count") +
+  xlab("Log Sales (in million EUR)") +
+  theme_bg()
+
+# put sales_g and logsales_g2 in one plot
+sales_plot <- grid.arrange(sales_g, logsales_g2, ncol = 2)
+
+# save plot
+ggsave("output/sales_plot.png",plot =  sales_plot, width = 8, height = 4, units = "in", dpi = 300)
+
+# Boxplots Financials
+
+g1 <- ggplot(data = data, aes(x = as.factor(target), y = sales_mil_log)) +
+  geom_boxplot(color = color[3],  alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  labs( y = "ln(Sales in million EUR)", x = " ") + 
+  scale_x_discrete(labels = c("Other", "Fast Growing firm"))+
+  theme_linedraw()
+
+ g2 <- ggplot(data = data, aes(x = as.factor(target), y = log(total_assets_bs))) +
+  geom_boxplot(color = color[3],  alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  labs( y = "In(Total Assets in million EUR)", x = " ") + 
+  scale_x_discrete(labels = c("Other", "Fast Growing firm"))+
+  theme_linedraw()
+
+g3 <- ggplot(data = data, aes(x = as.factor(target), y = 100*curr_liab_bs)) +
+  geom_boxplot(color = color[3],  alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  labs( y = "Current Liabilities %", x = " ") + 
+  scale_x_discrete(labels = c("Other", "Fast Growing firm"))+
+  theme_linedraw()
+
+# put together
+financials_plot <- grid.arrange(g1, g2,g3, ncol = 3)
+
+# save plot
+ggsave("output/financials_plot.png",plot =  financials_plot, width = 8, height = 4, units = "in", dpi = 300)
+
+# Other
+g4 <- ggplot(data = data, aes(x = as.factor(target), y = ceo_age)) +
+  geom_boxplot(color = color[3],  alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  labs( y = "Age of the CEO", x = " ") + 
+  scale_x_discrete(labels = c("Other", "Fast Growing firm"))+
+  theme_linedraw()
+
+g5 <- ggplot(data = data, aes(x = as.factor(target), y = age)) +
+  geom_boxplot(color = color[3],  alpha = 0.8, show.legend=FALSE, na.rm=TRUE) +
+  labs( y = "Age of the firm", x = " ") + 
+  scale_x_discrete(labels = c("Other", "Fast Growing firm"))+
+  theme_linedraw()
+
+# put together
+age_plot <- grid.arrange(g4, g5, ncol = 2)
+
+# save plot
+ggsave("output/age_plot.png",plot =  age_plot, width = 8, height = 4, units = "in", dpi = 300)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
