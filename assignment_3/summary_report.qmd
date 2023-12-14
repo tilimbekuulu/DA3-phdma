@@ -14,7 +14,7 @@ The dataset employed in this assignment is derived from the "Bisnode firms" data
 
 ## Model estimation
 
-Having evaluated the performance of several classification models, I have chosen the logit X4 and random forest models. To define the loss function, I am assuming that the cost of a false negative is two times higher than that of a false positive. While there is a risk of missing the opportunity to invest in a firm that will experience rapid growth, there is also the possibility of investing in a firm that will grow in sales but not at the pace we have defined. The table below presents results of the cross-validated average RMSE, AUC(the average of five folds) and Expected Loss for each model.
+Having evaluated the performance of several classification models, I have chosen the logit X4 and random forest model. To define the loss function, I am assuming that the cost of a false negative is two times higher than that of a false positive. While there is a risk of missing the opportunity to invest in a firm that will experience rapid growth, there is also the possibility of investing in a firm that will grow in sales but not at the pace we have defined. The table below presents results of the cross-validated average RMSE, AUC(the average of five folds) and Expected Loss for each model.
 
 ```{=tex}
 \begin{table}[ht]
@@ -31,7 +31,7 @@ RF probability  & 0.347 & 0.749 & 0.381 & 0.281\\
 \end{tabular}
 \end{table}
 ```
-The best model is the random forest model with a optimal probability threshold of 0.381. It has the lowest RMSE and AUC, however Logit X4 is marginally worse. Since the companies are obliged to report and interpret the predictors, I would recommend the Logit X4 model. The model has a good predictive power and is easy to interpret. Switching to logit X4 would result in just in 3 euro loss per firm compared to the random forest model. The graph below shows the ROC curve of the logit X4 model.
+The best model is the random forest model with a optimal probability threshold of 0.381. It has the lowest RMSE and highest AUC, however Logit X4 is just marginally worse. Since the companies are obliged to report and interpret the predictors, I would recommend the Logit X4 model. The model has a good predictive power and is easy to interpret. Switching to logit X4 would result in just in 3 euro loss per firm compared to the random forest model. The graph below shows the ROC curve of the logit X4 model.
 
 ![ROC Curve](output/roc_plot.png){fig-align="center" width="423"}
 
@@ -79,5 +79,4 @@ Intuitively, the model should perform differently on each subsample. From the ta
 
 ## Conclusion
 
-To sum up, using dataset of firms from a middle-sized country in the EU in 2005-2016 in three selected industries, I have employed standard binary classification techniques in machine learning to identify and predict which firms are likely to be considered as "fast-growing." I specified various models and evaluated their performance. Using the specified loss function, I determined the optimal probability threshold for each model. The best model is the random forest model with a optimal probability threshold of 0.381. It has the lowest RMSE and highest AUC. While the random forest model excels in predictive power, the logit X4, though marginally inferior, offers easier interpretability. Opting for the logit X4 incurs only a 3 euro loss per firm compared to the random forest model. The model demonstrates a 31% sensitivity, correctly identifying 31% of fast-growing firms, and a 94% specificity, accurately identifying 94% of non-fast-growing firms. The overall accuracy of the model stands at 82%.
-Notably, the model's performance varies across industry subsamples. Specifically, it performs better on the services industry, where the Expected Loss and AUC measures are 0.30 and 0.78, respectively. In contrast, for the manufacturing industry, these measures are 0.32 and 0.70.
+To sum up, using dataset of firms from a middle-sized country in the EU in 2005-2016 in three selected industries, I have employed standard binary classification techniques in machine learning to identify and predict which firms are likely to be considered as "fast-growing." I specified various models and evaluated their performance. Using the specified loss function, I determined the optimal probability threshold for each model. The best model is the random forest model with a optimal probability threshold of 0.381. It has the lowest RMSE and highest AUC. While the random forest model excels in predictive power, the logit X4, though marginally inferior, offers easier interpretability. Notably, the model's performance varies across industry subsamples. Specifically, it performs better on the services industry, where the Expected Loss and AUC measures are 0.30 and 0.78, respectively. In contrast, for the manufacturing industry, these measures are 0.32 and 0.70.
